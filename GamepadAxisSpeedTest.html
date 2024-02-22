@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gamepad Axis and Button Data</title>
+</head>
+<body>
+<div style="display:flex">
+  <div>
+    <table border="1">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Axis 0</th>
+          <th>Axis 1</th>
+          <th>Speed</th>
+          <th>Button 3</th>
+        </tr>
+      </thead>
+      <tbody id="gamepadData">
+      </tbody>
+    </table>
+    <div id="highestSpeedDisplay">Highest Speed (Last 5 sec): 0</div>
+  </div>
+  <div>Button 3 Pressed</div>
+  <div>
+    <div id="button3SpeedDisplay">
+      <!-- <h3>Button 3 Pressed Speeds</h3> -->
+      <table border="1">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Speed</th>
+          </tr>
+        </thead>
+        <tbody id="button3SpeedData">
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<script>
+  var lastTimestamp = null;
+  var lastAxis0Value = null;
+  var lastAxis1Value = null;
+  var firstFrameSkipped = false;
+  var highestSpeed = 0;
+  var lastSpeed = 0;
+  var button3PressedSpeed = 0;
+  var button3Pressed = false;
+
+  // Display highest speed
+  var highestSpeedDisplay = document.getElementById("highestSpeedDisplay");
+  // Display Button 3 pressed speed
+  var button3SpeedDisplay = document.getElementById("button3SpeedDisplay");
+  var button3SpeedData = document.getElementById("button3SpeedData");
+
+  window.addEventListener("gamepadconnected", function(e) {
+    console.log("Gamepad connected at index %d: %s. %d buttons, %d axes.",
+      e.gamepad.index, e.gamepad.id,
+      e.gamepad.buttons.length, e.gamepad.axes.length);
+    
+    // Start monitoring the gamepad
+    requestAnimationFrame(updateGamepadStatus);
+  });
+
+  window.addEventListener("gamepaddisconnected", function(e) {
+    console.log("Gamepad disconnected from index %d: %s",
+      e.gamepad.index, e.gamepad.id);
+  });
+
+  // Reset highest speed every 5 seconds
+  setInterval(resetHighestSpeed, 5000);
+
+  function resetHighestSpeed() {
+    highestSpeed = 0;
+    highestSpeedDisplay.textContent = "Highest Speed (Last 5 sec): " + highestSpeed;
+  }
+
+  function updateGamepadStatus(timestamp) {
+    var gamepads = navigator.getGamepads();
+    
+    for (var i = 0; i < gamepads.length; i++) {
+      var gamepad = gamepads[i];
+      if (gamepad) {
+        // Calculate time difference
+        var deltaTime = (lastTimestamp !== null) ? timestamp - lastTimestamp : 0;
+
+        // Skip calculation for the first frame
+        if (!firstFrameSkipped) {
+          firstFrameSkipped = true;
+          lastTimestamp = timestamp;
+          continue;
+        }
+
+        // Create new table row
+        var newRow = document.createElement("tr");
+
+        // Add timestamp
+        var timestampCell = document.createElement("td");
+        timestampCell.textContent = new Date().toLocaleTimeString();
+        newRow.appendChild(timestampCell);
+
+        // Add axis values
+        var axis0Cell = document.createElement("td");
+        axis0Cell.textContent = gamepad.axes[0].toFixed(2);
+        newRow.appendChild(axis0Cell);
+
+        var axis1Cell = document.createElement("td");
+        axis1Cell.textContent = gamepad.axes[1].toFixed(2);
+        newRow.appendChild(axis1Cell);
+
+        // Calculate speed
+        if (lastAxis0Value !== null && lastAxis1Value !== null) {
+          var deltaAxis0 = gamepad.axes[0] - lastAxis0Value;
+          var deltaAxis1 = gamepad.axes[1] - lastAxis1Value;
+          
+          // Check if denominator is 0
+          if (deltaTime !== 0) {
+            var speedX = (deltaAxis0 / deltaTime * 1000).toFixed(2);
+            var speedY = (deltaAxis1 / deltaTime * 1000).toFixed(2);
+            var speed = Math.sqrt(speedX * speedX + speedY * speedY).toFixed(2);
+
+            if (!isNaN(speed)) {
+              // Update highest speed
+              if (speed > highestSpeed) {
+                highestSpeed = speed;
+                highestSpeedDisplay.textContent = "Highest Speed (Last 5 sec): " + highestSpeed;
+              }
+            }
+
+            // Update last speed
+            lastSpeed = speed;
+
+            // Update table
+            var speedCell = document.createElement("td");
+            speedCell.textContent = speed;
+            newRow.appendChild(speedCell);
+          } else {
+            // Speed is 0 when deltaTime is 0
+            var speedCell = document.createElement("td");
+            speedCell.textContent = "0.00";
+            newRow.appendChild(speedCell);
+          }
+        }
+
+        // Check if Button 3 is pressed
+        var currentButton3Pressed = gamepad.buttons[2].pressed;
+
+        // Add Button 3 status
+        var button3Cell = document.createElement("td");
+        button3Cell.textContent = currentButton3Pressed ? "Pressed" : "Released";
+        newRow.appendChild(button3Cell);
+
+        // Update table
+        var gamepadData = document.getElementById("gamepadData");
+        gamepadData.appendChild(newRow);
+
+        // Limit the number of rows in the table
+        var maxRows = 20;
+        if (gamepadData.children.length > maxRows) {
+          gamepadData.removeChild(gamepadData.children[0]);
+        }
+
+        // Check if Button 3 state has changed
+        if (currentButton3Pressed !== button3Pressed) {
+          if (currentButton3Pressed) {
+            // Button 3 is pressed, store the pressed speed
+            button3PressedSpeed = lastSpeed;
+
+            // Add pressed speed to the table
+            var button3SpeedRow = document.createElement("tr");
+            var button3SpeedTimestampCell = document.createElement("td");
+            button3SpeedTimestampCell.textContent = new Date().toLocaleTimeString();
+            button3SpeedRow.appendChild(button3SpeedTimestampCell);
+            var button3SpeedCell = document.createElement("td");
+            button3SpeedCell.textContent = button3PressedSpeed;
+            button3SpeedRow.appendChild(button3SpeedCell);
+            button3SpeedData.appendChild(button3SpeedRow);
+
+            // Limit the number of rows in the button 3 speed table
+            if (button3SpeedData.children.length > maxRows) {
+              button3SpeedData.removeChild(button3SpeedData.children[0]);
+            }
+          }
+        }
+
+        // Update button 3 pressed state
+        button3Pressed = currentButton3Pressed;
+
+        // Store current values for next frame
+        lastTimestamp = timestamp;
+        lastAxis0Value = gamepad.axes[0];
+        lastAxis1Value = gamepad.axes[1];
+      }
+    }
+    
+    requestAnimationFrame(updateGamepadStatus);
+  }
+
+  requestAnimationFrame(updateGamepadStatus);
+</script>
+</body>
+</html>
